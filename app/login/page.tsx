@@ -1,18 +1,19 @@
 import { login, signup } from "./actions";
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: Promise<{ error?: string }>;
 }) {
+  const sp = (await searchParams) ?? {};
+  const error = sp.error;
+
   return (
     <main className="p-6 max-w-md space-y-4">
       <h1 className="text-2xl font-bold">Login</h1>
 
-      {searchParams?.error ? (
-        <p className="text-sm text-red-600">
-          {decodeURIComponent(searchParams.error)}
-        </p>
+      {error ? (
+        <p className="text-sm text-red-600">{decodeURIComponent(error)}</p>
       ) : null}
 
       <form className="space-y-3">
@@ -47,10 +48,7 @@ export default function LoginPage({
             Log in
           </button>
 
-          <button
-            formAction={signup}
-            className="rounded-md border px-4 py-2"
-          >
+          <button formAction={signup} className="rounded-md border px-4 py-2">
             Sign up
           </button>
         </div>
