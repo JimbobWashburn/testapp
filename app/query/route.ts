@@ -1,26 +1,41 @@
-// import postgres from 'postgres';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
-// const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+type CustomerEmbed = { name: string | null } | { name: string | null }[] | null;
 
-// async function listInvoices() {
-// 	const data = await sql`
-//     SELECT invoices.amount, customers.name
-//     FROM invoices
-//     JOIN customers ON invoices.customer_id = customers.id
-//     WHERE invoices.amount = 666;
-//   `;
-
-// 	return data;
-// }
+function customerName(customers: CustomerEmbed) {
+  if (!customers) return null;
+  return Array.isArray(customers) ? customers[0]?.name ?? null : customers.name;
+}
 
 export async function GET() {
-  return Response.json({
-    message:
-      'Uncomment this file and remove this line. You can delete this file when you are finished.',
-  });
-  // try {
-  // 	return Response.json(await listInvoices());
-  // } catch (error) {
-  // 	return Response.json({ error }, { status: 500 });
-  // }
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("id, amount, status, created_at, customers(name)")
+      .eq("amount", 666)
+      .limit(50);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const rows =
+      (data ?? []).map((inv: any) => ({
+        id: inv.id,
+        amount: Number(inv.amount),
+        status: inv.status,
+        created_at: inv.created_at,
+        customer: customerName(inv.customers) ?? "(unknown)",
+      })) ?? [];
+
+    return NextResponse.json({ rows });
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message ?? String(err) },
+      { status: 500 }
+    );
+  }
 }
