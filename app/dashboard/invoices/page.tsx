@@ -1,109 +1,68 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createInvoice } from "./actions";
 
-export default async function InvoicesPage() {
+type CustomerEmbed = {
+  name: string | null;
+  email?: string | null;
+};
+
+type InvoiceRow = {
+  id: string;
+  amount: number | string;
+  status: string;
+  created_at: string;
+  customers: CustomerEmbed | CustomerEmbed[] | null;
+};
+
+function getCustomer(inv: InvoiceRow): CustomerEmbed | null {
+  if (!inv.customers) return null;
+  return Array.isArray(inv.customers) ? inv.customers[0] ?? null : inv.customers;
+}
+
+export default async function CustomerInvoicesPage() {
   const supabase = await createClient();
 
-  const { data: customers } = await supabase
-    .from("customers")
-    .select("id, name, email")
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, amount, status, created_at, customers(name,email)")
     .order("created_at", { ascending: false });
 
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("id, amount, status, created_at, customers(name)")
-    .order("created_at", { ascending: false });
+  if (error) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1>Customer Invoices</h1>
+        <p>DB error: {error.message}</p>
+        <Link href="/dashboard/invoices">← Back to invoices</Link>
+      </main>
+    );
+  }
+
+  const invoices = (data ?? []) as InvoiceRow[];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Invoices</h1>
-        <p className="text-gray-600">Creates invoices in Supabase (real DB).</p>
-      </div>
+    <main style={{ padding: 24 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
 
-      {!customers || customers.length === 0 ? (
-        <div className="rounded-md border bg-white p-4">
-          <p className="text-gray-700">
-            Add a customer first on <strong>/dashboard/customers</strong>.
-          </p>
-        </div>
-      ) : (
-        <form action={createInvoice} className="rounded-md border bg-white p-4 space-y-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="space-y-1">
-              <div className="text-sm font-medium">Customer</div>
-              <select className="w-full rounded-md border px-3 py-2" name="customer_id" defaultValue={customers[0].id}>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+      <ul style={{ marginTop: 12 }}>
+        {invoices.map((inv) => {
+          const customer = getCustomer(inv);
+          const customerName = customer?.name ?? "Unknown customer";
 
-            <label className="space-y-1">
-              <div className="text-sm font-medium">Amount</div>
-              <input className="w-full rounded-md border px-3 py-2" name="amount" defaultValue="99.00" inputMode="decimal" />
-            </label>
-
-            <label className="space-y-1">
-              <div className="text-sm font-medium">Status</div>
-              <select className="w-full rounded-md border px-3 py-2" name="status" defaultValue="Open">
-                <option>Open</option>
-                <option>Paid</option>
-                <option>Overdue</option>
-              </select>
-            </label>
-          </div>
-
-          <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-white">
-            Create invoice
-          </button>
-        </form>
-      )}
-
-      <div className="rounded-md border bg-white">
-        <div className="border-b p-3 font-medium">Invoice list</div>
-
-        {!invoices || invoices.length === 0 ? (
-          <div className="p-3 text-gray-600">No invoices yet.</div>
-        ) : (
-          <ul className="divide-y">
-            {invoices.map((inv: any) => (
-              <li key={inv.id} className="p-3 flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href={`/dashboard/invoices/${inv.id}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {inv.id}
-                    </Link>
-
-                    <div className="text-gray-700">{inv.customers?.name ?? "(unknown)"}</div>
-                    <div className="text-gray-700">${Number(inv.amount).toFixed(2)}</div>
-                    <div className="rounded-full bg-gray-100 px-2 py-0.5 text-sm">
-                      {inv.status}
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-gray-500 mt-1">
-                    {new Date(inv.created_at).toLocaleString()}
-                  </div>
-                </div>
-
-                <Link
-                  href={`/dashboard/invoices/${inv.id}`}
-                  className="text-blue-600 hover:underline whitespace-nowrap"
-                >
-                  View →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+          return (
+            <li key={inv.id} style={{ padding: 10, borderBottom: "1px solid #eee" }}>
+              <div>
+                <b>{customerName}</b>
+              </div>
+              <div>
+                ${Number(inv.amount).toFixed(2)} — {inv.status}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                {new Date(inv.created_at).toLocaleString()}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </main>
   );
 }
