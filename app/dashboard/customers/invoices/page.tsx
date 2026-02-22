@@ -24,7 +24,9 @@ export default async function CustomerInvoicesPage() {
       <ul style={{ marginTop: 12 }}>
         {invoices?.map((inv) => (
           <li key={inv.id} style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-            <div><b>{inv.customers?.name ?? "Unknown customer"}</b></div>
+            <div>
+              <b>{inv.customers?.[0]?.name ?? "Unknown customer"}</b>
+            </div>
             <div>${Number(inv.amount).toFixed(2)} — {inv.status}</div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>
               {new Date(inv.created_at).toLocaleString()}
