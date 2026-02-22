@@ -11,7 +11,10 @@ export async function createClient() {
 
   if (!url || !key) {
     throw new Error(
-      "Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)."
+      `Missing Supabase env vars on server. ` +
+        `hasUrl=${!!url} ` +
+        `hasAnonKey=${!!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY} ` +
+        `hasPublishableKey=${!!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`
     );
   }
 
@@ -26,7 +29,7 @@ export async function createClient() {
             cookieStore.set(name, value, options)
           );
         } catch {
-          // ok if called from Server Components when proxy/middleware is refreshing sessions
+          // ok if called from Server Components when proxy is refreshing sessions
         }
       },
     },
