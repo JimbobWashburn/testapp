@@ -36,10 +36,10 @@ export default async function InvoiceDetailPage({
 
       <div className="rounded-md border bg-white p-4 space-y-4">
         <div>
-          <div className="text-sm text-gray-500">Customer</div>
-          <div className="font-medium">{invoice.customers?.name ?? "(unknown)"}</div>
-          <div className="text-sm text-gray-600">{invoice.customers?.email ?? ""}</div>
-        </div>
+  <div className="text-sm text-gray-500">Customer</div>
+  <div className="font-medium">{invoice.customers?.[0]?.name ?? "(unknown)"}</div>
+  <div className="text-sm text-gray-600">{invoice.customers?.[0]?.email ?? ""}</div>
+</div>
 
         <div className="flex gap-8">
           <div>
