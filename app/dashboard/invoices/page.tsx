@@ -44,24 +44,20 @@ export default async function CustomerInvoicesPage() {
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
 
       <ul style={{ marginTop: 12 }}>
-        {invoices.map((inv) => {
-          const customer = getCustomer(inv);
-          const customerName = customer?.name ?? "Unknown customer";
+{invoices.map((inv) => {
+  const customer = getCustomer(inv);
+  const customerName = customer?.name ?? "Unknown customer";
 
-          return (
-            <li key={inv.id} style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-              <div>
-                <b>{customerName}</b>
-              </div>
-              <div>
-                ${Number(inv.amount).toFixed(2)} — {inv.status}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                {new Date(inv.created_at).toLocaleString()}
-              </div>
-            </li>
-          );
-        })}
+  return (
+    <li key={inv.id} style={{ padding: 10, borderBottom: "1px solid #eee" }}>
+      <div><b>{customerName}</b></div>
+      <div>${Number(inv.amount).toFixed(2)} — {inv.status}</div>
+      <div style={{ fontSize: 12, opacity: 0.7 }}>
+        {new Date(inv.created_at).toLocaleString()}
+      </div>
+    </li>
+  );
+})}
       </ul>
     </main>
   );
