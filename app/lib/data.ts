@@ -1,218 +1,205 @@
-import postgres from 'postgres';
-import {
-  CustomerField,
-  CustomersTableType,
-  InvoiceForm,
-  InvoicesTable,
-  LatestInvoiceRaw,
-  Revenue,
-} from './definitions';
-import { formatCurrency } from './utils';
-
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
-
-export async function fetchRevenue() {
-  try {
-    // Artificially delay a response for demo purposes.
-    // Don't do this in production :)
-
-    // console.log('Fetching revenue data...');
-    // await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
-
-    // console.log('Data fetch completed after 3 seconds.');
-
-    return data;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
-  }
-}
-
-export async function fetchLatestInvoices() {
-  try {
-    const data = await sql<LatestInvoiceRaw[]>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
-      LIMIT 5`;
-
-    const latestInvoices = data.map((invoice) => ({
-      ...invoice,
-      amount: formatCurrency(invoice.amount),
-    }));
-    return latestInvoices;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch the latest invoices.');
-  }
-}
-
-export async function fetchCardData() {
-  try {
-    // You can probably combine these into a single SQL query
-    // However, we are intentionally splitting them to demonstrate
-    // how to initialize multiple queries in parallel with JS.
-    const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`;
-    const customerCountPromise = sql`SELECT COUNT(*) FROM customers`;
-    const invoiceStatusPromise = sql`SELECT
-         SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
-         SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-         FROM invoices`;
-
-    const data = await Promise.all([
-      invoiceCountPromise,
-      customerCountPromise,
-      invoiceStatusPromise,
-    ]);
-
-    const numberOfInvoices = Number(data[0][0].count ?? '0');
-    const numberOfCustomers = Number(data[1][0].count ?? '0');
-    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? '0');
-    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? '0');
-
-    return {
-      numberOfCustomers,
-      numberOfInvoices,
-      totalPaidInvoices,
-      totalPendingInvoices,
-    };
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch card data.');
-  }
-}
+import "server-only";
+import { createClient } from "@/lib/supabase/server";
 
 const ITEMS_PER_PAGE = 6;
-export async function fetchFilteredInvoices(
-  query: string,
-  currentPage: number,
-) {
-  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
+type CustomerEmbed = {
+  name: string | null;
+  email: string | null;
+  image_url?: string | null;
+};
+
+function pickCustomer(c: CustomerEmbed | CustomerEmbed[] | null | undefined) {
+  if (!c) return null;
+  return Array.isArray(c) ? c[0] ?? null : c;
+}
+
+function titleCaseStatus(s: string) {
+  const v = s.toLowerCase();
+  if (v === "open") return "Open";
+  if (v === "paid") return "Paid";
+  if (v === "overdue") return "Overdue";
+  return s;
+}
+
+export async function fetchFilteredInvoices(query: string, currentPage: number) {
+  const supabase = await createClient();
+  const q = (query ?? "").trim();
+  const from = (currentPage - 1) * ITEMS_PER_PAGE;
+  const to = from + ITEMS_PER_PAGE - 1;
+
+  // Base query (we map to the table shape the UI expects)
+  let builder = supabase
+    .from("invoices")
+    .select("id, amount, status, created_at, customer_id, customers(name,email,image_url)")
+    .order("created_at", { ascending: false });
 
   try {
-    const invoices = await sql<InvoicesTable[]>`
-      SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
-      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
-    `;
+    if (q) {
+      const status = ["open", "paid", "overdue"].includes(q.toLowerCase())
+        ? titleCaseStatus(q)
+        : null;
 
-    return invoices;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoices.');
+      // Find matching customers by name/email
+      const { data: custRows } = await supabase
+        .from("customers")
+        .select("id")
+        .or(`name.ilike.%${q}%,email.ilike.%${q}%`);
+
+      const custIds = (custRows ?? []).map((r) => r.id);
+
+      if (custIds.length > 0) {
+        builder = builder.in("customer_id", custIds);
+      } else if (status) {
+        builder = builder.eq("status", status);
+      } else {
+        const asNum = Number(q);
+        if (Number.isFinite(asNum)) builder = builder.eq("amount", asNum);
+        else return []; // nothing matches
+      }
+    }
+
+    const { data, error } = await builder.range(from, to);
+    if (error) return [];
+
+    return (data ?? []).map((inv: any) => {
+      const c = pickCustomer(inv.customers);
+      return {
+        id: inv.id,
+        amount: Number(inv.amount),
+        status: inv.status,
+        date: inv.created_at, // the UI usually expects `date`
+        name: c?.name ?? "(unknown)",
+        email: c?.email ?? "",
+        image_url: c?.image_url ?? null,
+      };
+    });
+  } catch {
+    return [];
   }
 }
 
 export async function fetchInvoicesPages(query: string) {
-  try {
-    const data = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-  `;
+  const supabase = await createClient();
+  const q = (query ?? "").trim();
 
-    const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
-    return totalPages;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch total number of invoices.');
+  let builder = supabase
+    .from("invoices")
+    .select("id, customer_id, status, amount", { count: "exact", head: true });
+
+  try {
+    if (q) {
+      const status = ["open", "paid", "overdue"].includes(q.toLowerCase())
+        ? titleCaseStatus(q)
+        : null;
+
+      const { data: custRows } = await supabase
+        .from("customers")
+        .select("id")
+        .or(`name.ilike.%${q}%,email.ilike.%${q}%`);
+
+      const custIds = (custRows ?? []).map((r) => r.id);
+
+      if (custIds.length > 0) {
+        builder = builder.in("customer_id", custIds);
+      } else if (status) {
+        builder = builder.eq("status", status);
+      } else {
+        const asNum = Number(q);
+        if (Number.isFinite(asNum)) builder = builder.eq("amount", asNum);
+        else return 0;
+      }
+    }
+
+    const { count } = await builder;
+    const total = count ?? 0;
+    return Math.ceil(total / ITEMS_PER_PAGE);
+  } catch {
+    return 0;
   }
 }
 
-export async function fetchInvoiceById(id: string) {
-  try {
-    const data = await sql<InvoiceForm[]>`
-      SELECT
-        invoices.id,
-        invoices.customer_id,
-        invoices.amount,
-        invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
-    `;
+export async function fetchLatestInvoices() {
+  const supabase = await createClient();
 
-    const invoice = data.map((invoice) => ({
-      ...invoice,
-      // Convert amount from cents to dollars
-      amount: invoice.amount / 100,
-    }));
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, amount, customers(name,email,image_url)")
+    .order("created_at", { ascending: false })
+    .limit(5);
 
-    return invoice[0];
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoice.');
-  }
+  if (error) return [];
+
+  return (data ?? []).map((inv: any) => {
+    const c = pickCustomer(inv.customers);
+    return {
+      id: inv.id,
+      amount: Number(inv.amount),
+      name: c?.name ?? "(unknown)",
+      email: c?.email ?? "",
+      image_url: c?.image_url ?? null,
+    };
+  });
 }
 
 export async function fetchCustomers() {
-  try {
-    const customers = await sql<CustomerField[]>`
-      SELECT
-        id,
-        name
-      FROM customers
-      ORDER BY name ASC
-    `;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, name, email, image_url")
+    .order("name", { ascending: true });
 
-    return customers;
-  } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch all customers.');
-  }
+  if (error) return [];
+  return data ?? [];
 }
 
 export async function fetchFilteredCustomers(query: string) {
-  try {
-    const data = await sql<CustomersTableType[]>`
-		SELECT
-		  customers.id,
-		  customers.name,
-		  customers.email,
-		  customers.image_url,
-		  COUNT(invoices.id) AS total_invoices,
-		  SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
-		  SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
-		FROM customers
-		LEFT JOIN invoices ON customers.id = invoices.customer_id
-		WHERE
-		  customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`}
-		GROUP BY customers.id, customers.name, customers.email, customers.image_url
-		ORDER BY customers.name ASC
-	  `;
+  const supabase = await createClient();
+  const q = (query ?? "").trim();
 
-    const customers = data.map((customer) => ({
-      ...customer,
-      total_pending: formatCurrency(customer.total_pending),
-      total_paid: formatCurrency(customer.total_paid),
-    }));
+  let builder = supabase
+    .from("customers")
+    .select("id, name, email, image_url")
+    .order("name", { ascending: true });
 
-    return customers;
-  } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch customer table.');
+  if (q) builder = builder.or(`name.ilike.%${q}%,email.ilike.%${q}%`);
+
+  const { data, error } = await builder;
+  if (error) return [];
+  return data ?? [];
+}
+
+// If your dashboard references these, return safe defaults so nothing crashes.
+export async function fetchRevenue() {
+  return [];
+}
+
+export async function fetchCardData() {
+  const supabase = await createClient();
+
+  const { count: customerCount } = await supabase
+    .from("customers")
+    .select("id", { count: "exact", head: true });
+
+  const { data: invs } = await supabase.from("invoices").select("amount,status");
+
+  const invoices = invs ?? [];
+  const numberOfInvoices = invoices.length;
+  const numberOfCustomers = customerCount ?? 0;
+
+  let totalPaidInvoices = 0;
+  let totalPendingInvoices = 0;
+
+  for (const inv of invoices as any[]) {
+    const amt = Number(inv.amount) || 0;
+    if (String(inv.status).toLowerCase() === "paid") totalPaidInvoices += amt;
+    else totalPendingInvoices += amt;
   }
+
+  return {
+    numberOfCustomers,
+    numberOfInvoices,
+    totalPaidInvoices,
+    totalPendingInvoices,
+  };
 }
