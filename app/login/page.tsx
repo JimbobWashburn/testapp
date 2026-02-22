@@ -1,12 +1,14 @@
 import { login, signup } from "./actions";
 
+type SP = { error?: string };
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: SP | Promise<SP>;
 }) {
-  const sp = (await searchParams) ?? {};
-  const error = sp.error;
+  const sp = await Promise.resolve(searchParams);
+  const error = sp?.error;
 
   return (
     <main className="p-6 max-w-md space-y-4">
@@ -41,13 +43,9 @@ export default async function LoginPage({
         </div>
 
         <div className="flex gap-2">
-          <button
-            formAction={login}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white"
-          >
+          <button formAction={login} className="rounded-md bg-blue-600 px-4 py-2 text-white">
             Log in
           </button>
-
           <button formAction={signup} className="rounded-md border px-4 py-2">
             Sign up
           </button>
