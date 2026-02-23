@@ -1,52 +1,35 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function addCustomer(formData: FormData) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
   const name = String(formData.get("name") || "").trim();
   const email = String(formData.get("email") || "").trim();
 
-  if (!name) redirect("/dashboard/customers?error=name");
+  if (!name || !email) return;
 
   const { error } = await supabase.from("customers").insert({
-    user_id: user.id,
     name,
-    email: email || null,
+    email,
+    // image_url omitted: your schema has a DEFAULT, so it's safe
   });
 
-  if (error) redirect("/dashboard/customers?error=db");
+  if (error) throw new Error(error.message);
 
-  redirect("/dashboard/customers");
+  revalidatePath("/dashboard/customers");
 }
 
 export async function removeCustomer(formData: FormData) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const id = String(formData.get("id") || "").trim();
+  if (!id) return;
 
-  if (!user) redirect("/login");
+  const { error } = await supabase.from("customers").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 
-  const id = String(formData.get("id") || "");
-  if (!id) redirect("/dashboard/customers");
-
-  const { error } = await supabase
-    .from("customers")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) redirect("/dashboard/customers?error=db");
-
-  redirect("/dashboard/customers");
+  revalidatePath("/dashboard/customers");
 }

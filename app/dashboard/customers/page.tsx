@@ -6,8 +6,8 @@ export default async function CustomersPage() {
 
   const { data: customers, error } = await supabase
     .from("customers")
-    .select("id, name, email, created_at")
-    .order("created_at", { ascending: false });
+    .select("id, name, email, image_url")
+    .order("name", { ascending: true });
 
   return (
     <div className="space-y-6">
@@ -37,6 +37,7 @@ export default async function CustomersPage() {
               className="w-full rounded-md border px-3 py-2"
               name="email"
               placeholder="billing@acme.com"
+              required
             />
           </label>
         </div>
@@ -55,9 +56,18 @@ export default async function CustomersPage() {
           <ul className="divide-y">
             {customers.map((c) => (
               <li key={c.id} className="flex items-center justify-between p-3">
-                <div>
-                  <div className="font-medium">{c.name}</div>
-                  <div className="text-sm text-gray-600">{c.email ?? ""}</div>
+                <div className="flex items-center gap-3">
+                  {/* optional avatar */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={c.image_url}
+                    alt={c.name}
+                    className="h-9 w-9 rounded-full border"
+                  />
+                  <div>
+                    <div className="font-medium">{c.name}</div>
+                    <div className="text-sm text-gray-600">{c.email}</div>
+                  </div>
                 </div>
 
                 <form action={removeCustomer}>
