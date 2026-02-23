@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 
 const ITEMS_PER_PAGE = 6;
+const DEFAULT_AVATAR = "/customers/default.png";
 
 type CustomerEmbed = {
   name: string | null;
@@ -28,10 +29,11 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
   const from = (currentPage - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
 
-  // Base query (we map to the table shape the UI expects)
   let builder = supabase
     .from("invoices")
-    .select("id, amount, status, created_at, customer_id, customers(name,email,image_url)")
+    .select(
+      "id, amount, status, created_at, customer_id, customers(name,email,image_url)"
+    )
     .order("created_at", { ascending: false });
 
   try {
@@ -40,13 +42,12 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
         ? titleCaseStatus(q)
         : null;
 
-      // Find matching customers by name/email
       const { data: custRows } = await supabase
         .from("customers")
         .select("id")
         .or(`name.ilike.%${q}%,email.ilike.%${q}%`);
 
-      const custIds = (custRows ?? []).map((r) => r.id);
+      const custIds = (custRows ?? []).map((r: any) => r.id);
 
       if (custIds.length > 0) {
         builder = builder.in("customer_id", custIds);
@@ -55,7 +56,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
       } else {
         const asNum = Number(q);
         if (Number.isFinite(asNum)) builder = builder.eq("amount", asNum);
-        else return []; // nothing matches
+        else return [];
       }
     }
 
@@ -68,10 +69,11 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
         id: inv.id,
         amount: Number(inv.amount),
         status: inv.status,
-        date: inv.created_at, // the UI usually expects `date`
+        date: inv.created_at, // UI expects `date`
         name: c?.name ?? "(unknown)",
         email: c?.email ?? "",
-        image_url: c?.image_url ?? null,
+        // ✅ ALWAYS a string so Next/Image + LatestInvoice typings are happy
+        image_url: c?.image_url ?? DEFAULT_AVATAR,
       };
     });
   } catch {
@@ -98,7 +100,7 @@ export async function fetchInvoicesPages(query: string) {
         .select("id")
         .or(`name.ilike.%${q}%,email.ilike.%${q}%`);
 
-      const custIds = (custRows ?? []).map((r) => r.id);
+      const custIds = (custRows ?? []).map((r: any) => r.id);
 
       if (custIds.length > 0) {
         builder = builder.in("customer_id", custIds);
@@ -137,7 +139,8 @@ export async function fetchLatestInvoices() {
       amount: Number(inv.amount),
       name: c?.name ?? "(unknown)",
       email: c?.email ?? "",
-      image_url: c?.image_url ?? null,
+      // ✅ ALWAYS a string
+      image_url: c?.image_url ?? DEFAULT_AVATAR,
     };
   });
 }
