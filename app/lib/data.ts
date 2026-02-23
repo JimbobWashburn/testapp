@@ -72,8 +72,7 @@ export async function fetchFilteredInvoices(query: string, currentPage: number) 
         date: inv.created_at, // UI expects `date`
         name: c?.name ?? "(unknown)",
         email: c?.email ?? "",
-        // ✅ ALWAYS a string so Next/Image + LatestInvoice typings are happy
-        image_url: c?.image_url ?? DEFAULT_AVATAR,
+        image_url: c?.image_url ?? DEFAULT_AVATAR, // always string
       };
     });
   } catch {
@@ -136,11 +135,10 @@ export async function fetchLatestInvoices() {
     const c = pickCustomer(inv.customers);
     return {
       id: inv.id,
-      amount: Number(inv.amount),
+      amount: String(inv.amount), // ✅ string to match LatestInvoice type
       name: c?.name ?? "(unknown)",
       email: c?.email ?? "",
-      // ✅ ALWAYS a string
-      image_url: c?.image_url ?? DEFAULT_AVATAR,
+      image_url: c?.image_url ?? DEFAULT_AVATAR, // always string
     };
   });
 }
@@ -172,7 +170,7 @@ export async function fetchFilteredCustomers(query: string) {
   return data ?? [];
 }
 
-// If your dashboard references these, return safe defaults so nothing crashes.
+// Dashboard-safe defaults (won't crash if referenced)
 export async function fetchRevenue() {
   return [];
 }
@@ -186,14 +184,14 @@ export async function fetchCardData() {
 
   const { data: invs } = await supabase.from("invoices").select("amount,status");
 
-  const invoices = invs ?? [];
+  const invoices = (invs ?? []) as any[];
   const numberOfInvoices = invoices.length;
   const numberOfCustomers = customerCount ?? 0;
 
   let totalPaidInvoices = 0;
   let totalPendingInvoices = 0;
 
-  for (const inv of invoices as any[]) {
+  for (const inv of invoices) {
     const amt = Number(inv.amount) || 0;
     if (String(inv.status).toLowerCase() === "paid") totalPaidInvoices += amt;
     else totalPendingInvoices += amt;
