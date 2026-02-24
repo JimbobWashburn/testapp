@@ -67,4 +67,3 @@ export default async function CustomerInvoicesPage() {
     </main>
   );
 }
-}
