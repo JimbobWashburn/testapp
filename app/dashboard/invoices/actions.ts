@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 const UUID_RE =
@@ -23,14 +24,14 @@ export async function createInvoice(formData: FormData) {
     throw new Error(`Invalid amount_usd: "${amountUsd}"`);
   }
 
-  const { error } = await supabase.from("invoices").insert({
-    customer_id,
-    amount: amountCents,
-    status,
-    date,
-  });
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({ customer_id, amount: amountCents, status, date })
+    .select("id")
+    .single();
 
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard/invoices");
+  redirect(`/dashboard/invoices/${data.id}`);
 }

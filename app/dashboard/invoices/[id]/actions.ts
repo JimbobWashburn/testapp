@@ -9,6 +9,7 @@ const UUID_RE =
 export async function markInvoicePaid(formData: FormData) {
   const supabase = await createClient();
   const id = String(formData.get("id") || "").trim();
+
   if (!UUID_RE.test(id)) throw new Error(`Invalid invoice id: "${id}"`);
 
   const { error } = await supabase.from("invoices").update({ status: "paid" }).eq("id", id);
@@ -21,6 +22,7 @@ export async function markInvoicePaid(formData: FormData) {
 export async function reopenInvoice(formData: FormData) {
   const supabase = await createClient();
   const id = String(formData.get("id") || "").trim();
+
   if (!UUID_RE.test(id)) throw new Error(`Invalid invoice id: "${id}"`);
 
   const { error } = await supabase.from("invoices").update({ status: "pending" }).eq("id", id);
