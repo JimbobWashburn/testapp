@@ -8,16 +8,16 @@ function moneyFromCents(cents: number) {
   );
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function CustomerInvoicesPage() {
   const supabase = await createClient();
 
-  // Customers for dropdown (required for creating invoices)
   const { data: customers, error: customersError } = await supabase
     .from("customers")
     .select("id, name, email")
     .order("name", { ascending: true });
 
-  // Invoices list (join customers via FK)
   const { data: invoices, error: invoicesError } = await supabase
     .from("invoices")
     .select(`
@@ -34,11 +34,11 @@ export default async function CustomerInvoicesPage() {
     `)
     .order("date", { ascending: false });
 
-  const error = invoicesError || customersError;
+  const error = customersError || invoicesError;
   if (error) {
     return (
       <main style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Customer Invoices</h1>
         <p style={{ marginTop: 8, color: "crimson" }}>DB error: {error.message}</p>
       </main>
     );
@@ -49,25 +49,20 @@ export default async function CustomerInvoicesPage() {
 
   return (
     <main style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 800 }}>Customer Invoices</h1>
 
       {/* Create Invoice */}
       <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600 }}>Create Invoice</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700 }}>Create Invoice</h2>
 
         {customerList.length === 0 ? (
           <p style={{ marginTop: 8, color: "crimson" }}>
             No customers found. Add a customer first so you can create an invoice.
           </p>
         ) : (
-          <form
-            action={createInvoice}
-            style={{ marginTop: 12, display: "grid", gap: 10, maxWidth: 520 }}
-          >
+          <form action={createInvoice} style={{ marginTop: 12, display: "grid", gap: 10, maxWidth: 520 }}>
             <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Customer</span>
-
-              {/* ✅ DROPDOWN IS HERE */}
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Customer</span>
               <select
                 name="customer_id"
                 required
@@ -87,7 +82,7 @@ export default async function CustomerInvoicesPage() {
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Amount (USD)</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Amount (USD)</span>
               <input
                 name="amount_usd"
                 type="number"
@@ -103,7 +98,7 @@ export default async function CustomerInvoicesPage() {
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Status</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Status</span>
               <select
                 name="status"
                 required
@@ -116,7 +111,7 @@ export default async function CustomerInvoicesPage() {
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Invoice Date</span>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Invoice Date</span>
               <input
                 name="date"
                 type="date"
@@ -134,7 +129,7 @@ export default async function CustomerInvoicesPage() {
                 color: "white",
                 borderRadius: 8,
                 border: "none",
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: "pointer",
               }}
             >
@@ -151,17 +146,23 @@ export default async function CustomerInvoicesPage() {
         ) : (
           <ul style={{ marginTop: 12, padding: 0, listStyle: "none" }}>
             {invoiceList.map((inv: any) => {
+              // If inv.id is missing, don’t create a broken link
+              if (!inv?.id) {
+                return (
+                  <li key={Math.random()} style={{ padding: 12, borderBottom: "1px solid #eee", color: "crimson" }}>
+                    Invoice row missing id (cannot link)
+                  </li>
+                );
+              }
+
               const customer = Array.isArray(inv.customer) ? inv.customer[0] : inv.customer;
 
               return (
                 <li key={inv.id} style={{ padding: 12, borderBottom: "1px solid #eee" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                     <div>
-                      <div style={{ fontWeight: 700 }}>
-                        <Link
-                          href={`/dashboard/invoices/${inv.id}`}
-                          style={{ textDecoration: "underline" }}
-                        >
+                      <div style={{ fontWeight: 800 }}>
+                        <Link href={`/dashboard/invoices/${inv.id}`} style={{ textDecoration: "underline" }}>
                           Invoice #{String(inv.id).slice(0, 8)}
                         </Link>
                       </div>
@@ -178,7 +179,7 @@ export default async function CustomerInvoicesPage() {
                       </div>
                     </div>
 
-                    <div style={{ fontWeight: 800 }}>{moneyFromCents(inv.amount)}</div>
+                    <div style={{ fontWeight: 900 }}>{moneyFromCents(inv.amount)}</div>
                   </div>
                 </li>
               );

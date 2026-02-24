@@ -1,34 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-
-export async function markInvoicePaid(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  const supabase = await createClient();
-  await supabase.from("invoices").update({ status: "paid" }).eq("id", id);
-}
-
-export async function reopenInvoice(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  const supabase = await createClient();
-  await supabase.from("invoices").update({ status: "pending" }).eq("id", id);
-}
-
-export async function updateInvoice(formData: FormData) {
-  "use server";
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  const amountUsd = String(formData.get("amount_usd") ?? "0");
-  const status = String(formData.get("status") ?? "pending");
-  const date = String(formData.get("date") ?? new Date().toISOString());
-  const amount = Math.round((Number(amountUsd) || 0) * 100);
-  const supabase = await createClient();
-  await supabase.from("invoices").update({ amount, status, date }).eq("id", id);
-}
+import { markInvoicePaid, reopenInvoice, updateInvoice } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +37,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   if (error) {
     return (
       <main style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Invoice</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Invoice</h1>
         <p style={{ marginTop: 8, color: "crimson" }}>DB error: {error.message}</p>
         <p style={{ marginTop: 12 }}>
           <Link href="/dashboard/invoices">← Back to invoices</Link>
@@ -89,14 +62,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       </p>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800 }}>
           Invoice #{String(invoice.id).slice(0, 8)}
         </h1>
-        <div style={{ fontWeight: 800 }}>{moneyFromCents(invoice.amount)}</div>
+        <div style={{ fontWeight: 900 }}>{moneyFromCents(invoice.amount)}</div>
       </div>
 
       <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <div style={{ fontWeight: 700 }}>{customer?.name ?? "Unknown customer"}</div>
+        <div style={{ fontWeight: 800 }}>{customer?.name ?? "Unknown customer"}</div>
         <div style={{ opacity: 0.75 }}>{customer?.email ?? ""}</div>
 
         <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
@@ -108,7 +81,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           </div>
         </div>
 
-        {/* Quick actions */}
         <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
           {!isPaid ? (
             <form action={markInvoicePaid}>
@@ -121,7 +93,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                   color: "white",
                   borderRadius: 8,
                   border: "none",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
@@ -139,7 +111,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                   color: "white",
                   borderRadius: 8,
                   border: "none",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
@@ -150,15 +122,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      {/* Editable invoice form */}
       <section style={{ padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700 }}>Edit Invoice</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 800 }}>Edit Invoice</h2>
 
         <form action={updateInvoice} style={{ marginTop: 12, display: "grid", gap: 10, maxWidth: 520 }}>
           <input type="hidden" name="id" value={invoice.id} />
 
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Amount (USD)</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Amount (USD)</span>
             <input
               name="amount_usd"
               type="number"
@@ -171,7 +142,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Status</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Status</span>
             <select
               name="status"
               defaultValue={invoice.status}
@@ -184,7 +155,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Invoice Date</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Invoice Date</span>
             <input
               name="date"
               type="date"
@@ -202,7 +173,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               color: "white",
               borderRadius: 8,
               border: "none",
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
             }}
           >
