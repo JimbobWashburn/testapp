@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "crypto";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,14 +25,19 @@ export async function createInvoice(formData: FormData) {
     throw new Error(`Invalid amount_usd: "${amountUsd}"`);
   }
 
-  const { data, error } = await supabase
-    .from("invoices")
-    .insert({ customer_id, amount: amountCents, status, date })
-    .select("id")
-    .single();
+  // ✅ Generate id ourselves so redirect can NEVER be undefined
+  const id = randomUUID();
+
+  const { error } = await supabase.from("invoices").insert({
+    id,              // <— key change
+    customer_id,
+    amount: amountCents,
+    status,
+    date,
+  });
 
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard/invoices");
-  redirect(`/dashboard/invoices/${data.id}`);
+  redirect(`/dashboard/invoices/${id}`);
 }
