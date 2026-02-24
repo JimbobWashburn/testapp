@@ -1,43 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 
 export default async function CustomerInvoicesPage() {
-  // 1) Prove the page is executing at all
-  const renderedAt = new Date().toISOString();
+  const supabase = await createClient();
 
-  // 2) Prove env vars exist (won't leak secrets)
-  const env = {
-    hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    hasPublishableKey: !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  };
-
-  // 3) Create client safely
-  let supabase: any;
-  try {
-    supabase = await createClient();
-  } catch (e: any) {
-    return (
-      <main style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
-        <p style={{ marginTop: 8, color: "crimson" }}>
-          Failed to create Supabase client: {e?.message ?? String(e)}
-        </p>
-        <pre style={{ marginTop: 12, background: "#f6f6f6", padding: 12 }}>
-          {JSON.stringify({ renderedAt, env }, null, 2)}
-        </pre>
-      </main>
-    );
-  }
-
-  // 4) Run a BASIC query (no join) to isolate RLS / connectivity
-  const basic = await supabase
-    .from("invoices")
-    .select("id, amount, status, date, customer_id")
-    .order("date", { ascending: false })
-    .limit(50);
-
-  // 5) Run the JOIN query (requires FK + schema cache)
-  const joined = await supabase
+  const { data: invoices, error } = await supabase
     .from("invoices")
     .select(`
       id,
@@ -51,46 +17,27 @@ export default async function CustomerInvoicesPage() {
         image_url
       )
     `)
-    .order("date", { ascending: false })
-    .limit(50);
+    .order("date", { ascending: false });
 
-  const invoices = (joined.data ?? []) as any[];
+  if (error) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1>Customer Invoices</h1>
+        <p>DB error: {error.message}</p>
+      </main>
+    );
+  }
 
   return (
     <main style={{ padding: 24 }}>
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Customer Invoices</h1>
 
-      <pre style={{ marginTop: 12, background: "#f6f6f6", padding: 12 }}>
-        {JSON.stringify(
-          {
-            renderedAt,
-            env,
-            basic: {
-              ok: !basic.error,
-              error: basic.error?.message ?? null,
-              count: basic.data?.length ?? 0,
-            },
-            joined: {
-              ok: !joined.error,
-              error: joined.error?.message ?? null,
-              count: joined.data?.length ?? 0,
-            },
-          },
-          null,
-          2
-        )}
-      </pre>
-
-      {joined.error ? (
-        <p style={{ marginTop: 12, color: "crimson" }}>
-          JOIN failed: {joined.error.message}
-        </p>
-      ) : !invoices.length ? (
+      {!invoices || invoices.length === 0 ? (
         <p style={{ marginTop: 12, opacity: 0.7 }}>No invoices yet.</p>
       ) : (
         <ul style={{ marginTop: 12 }}>
-          {invoices.map((inv) => {
-            // Handle either object OR array shape safely
+          {invoices.map((inv: any) => {
+            // Supabase embedded relations can come back as an object OR an array.
             const customer = Array.isArray(inv.customer)
               ? inv.customer[0]
               : inv.customer;
@@ -104,7 +51,7 @@ export default async function CustomerInvoicesPage() {
                   <b>{customer?.name ?? "Unknown customer"}</b>
                 </div>
 
-                {/* If amount is dollars already, remove / 100 */}
+                {/* If your amount is stored in dollars already, remove the / 100 */}
                 <div>
                   ${(Number(inv.amount) / 100).toFixed(2)} — {inv.status}
                 </div>
@@ -119,4 +66,5 @@ export default async function CustomerInvoicesPage() {
       )}
     </main>
   );
+}
 }
