@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { markInvoicePaid, reopenInvoice, updateInvoice } from "./actions";
 
@@ -13,44 +12,79 @@ function moneyFromCents(cents: number) {
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
   const id = params?.id;
-  if (!id || id === "undefined") notFound();
+
+  // Don’t hard-404 on bad ids; show a friendly message instead.
+  if (!id || id === "undefined") {
+    return (
+      <main style={{ padding: 24 }}>
+        <p>
+          <Link href="/dashboard/invoices">← Back to invoices</Link>
+        </p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, marginTop: 10 }}>Invoice</h1>
+        <p style={{ marginTop: 8, color: "crimson" }}>Invalid invoice id in URL.</p>
+      </main>
+    );
+  }
 
   const supabase = await createClient();
 
-  const { data: invoice, error } = await supabase
+  // 1) Fetch invoice WITHOUT join first (more reliable for debugging/RLS).
+  const basic = await supabase
     .from("invoices")
-    .select(`
-      id,
-      amount,
-      status,
-      date,
-      customer:customers!invoices_customer_id_fkey (
-        id,
-        name,
-        email,
-        image_url
-      )
-    `)
+    .select("id, customer_id, amount, status, date")
     .eq("id", id)
     .maybeSingle();
 
-  if (error) {
+  if (basic.error) {
     return (
       <main style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Invoice</h1>
-        <p style={{ marginTop: 8, color: "crimson" }}>DB error: {error.message}</p>
-        <p style={{ marginTop: 12 }}>
+        <p>
           <Link href="/dashboard/invoices">← Back to invoices</Link>
+        </p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, marginTop: 10 }}>Invoice</h1>
+        <p style={{ marginTop: 8, color: "crimson" }}>DB error: {basic.error.message}</p>
+        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+          Invoice ID: <span style={{ fontFamily: "monospace" }}>{id}</span>
+        </div>
+      </main>
+    );
+  }
+
+  // If invoice isn’t returned, don’t 404. Show what’s happening.
+  if (!basic.data) {
+    return (
+      <main style={{ padding: 24 }}>
+        <p>
+          <Link href="/dashboard/invoices">← Back to invoices</Link>
+        </p>
+
+        <h1 style={{ fontSize: 24, fontWeight: 800, marginTop: 10 }}>Invoice not available</h1>
+
+        <p style={{ marginTop: 8, color: "crimson" }}>
+          No invoice returned for id:
+          <span style={{ fontFamily: "monospace" }}> {id}</span>
+        </p>
+
+        <p style={{ marginTop: 10, opacity: 0.85 }}>
+          Most common causes:
+          <br />• Invoice doesn’t exist
+          <br />• RLS is blocking SELECT on <b>invoices</b>
+          <br />• Your app is pointing at a different Supabase project (env vars)
         </p>
       </main>
     );
   }
 
-  if (!invoice) return notFound();
+  const invoice = basic.data;
 
-  const customer = Array.isArray((invoice as any).customer)
-    ? (invoice as any).customer[0]
-    : (invoice as any).customer;
+  // 2) Fetch customer separately (avoid join relationship/cache issues).
+  const customerRes = await supabase
+    .from("customers")
+    .select("id, name, email, image_url")
+    .eq("id", invoice.customer_id)
+    .maybeSingle();
+
+  const customer = customerRes.data ?? null;
 
   const isPaid = invoice.status === "paid";
   const amountUsdDefault = ((Number(invoice.amount) || 0) / 100).toFixed(2);
@@ -72,12 +106,21 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         <div style={{ fontWeight: 800 }}>{customer?.name ?? "Unknown customer"}</div>
         <div style={{ opacity: 0.75 }}>{customer?.email ?? ""}</div>
 
+        {customerRes.error ? (
+          <div style={{ marginTop: 6, color: "crimson", fontSize: 12 }}>
+            Customer lookup error: {customerRes.error.message}
+          </div>
+        ) : null}
+
         <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
           <div>
             <b>Status:</b> {invoice.status}
           </div>
           <div>
             <b>Date:</b> {new Date(invoice.date).toLocaleDateString()}
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            Invoice ID: <span style={{ fontFamily: "monospace" }}>{invoice.id}</span>
           </div>
         </div>
 
