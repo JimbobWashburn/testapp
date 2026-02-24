@@ -9,22 +9,14 @@ const UUID_RE =
 export async function createInvoice(formData: FormData) {
   const supabase = await createClient();
 
-  const rawCustomerId = formData.get("customer_id");
-  const rawAmountUsd = formData.get("amount_usd");
-  const rawStatus = formData.get("status");
-  const rawDate = formData.get("date");
+  const customer_id = String(formData.get("customer_id") || "").trim();
+  const status = String(formData.get("status") || "pending").trim();
+  const date = String(formData.get("date") || "").trim();
+  const amountUsd = String(formData.get("amount_usd") || "").trim();
 
-  const customer_id = typeof rawCustomerId === "string" ? rawCustomerId.trim() : "";
-  const status = typeof rawStatus === "string" ? rawStatus.trim() : "pending";
-  const date = typeof rawDate === "string" ? rawDate.trim() : "";
-  const amountUsd = typeof rawAmountUsd === "string" ? rawAmountUsd.trim() : "";
-
-  if (!customer_id) throw new Error("Pick a customer (customer_id missing).");
-  if (customer_id === "undefined" || !UUID_RE.test(customer_id)) {
-    throw new Error(`Invalid customer_id: "${customer_id}"`);
-  }
-
-  if (!date) throw new Error("Pick an invoice date.");
+  if (!UUID_RE.test(customer_id)) throw new Error(`Invalid customer_id: "${customer_id}"`);
+  if (!date) throw new Error("Missing invoice date.");
+  if (status !== "paid" && status !== "pending") throw new Error(`Invalid status: "${status}"`);
 
   const amountCents = Math.round(Number(amountUsd) * 100);
   if (!Number.isFinite(amountCents) || amountCents < 0) {
