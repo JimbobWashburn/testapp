@@ -1,65 +1,75 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function InvoiceDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+function moneyFromCents(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+    (Number(cents) || 0) / 100
+  );
+}
+
+export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
   const supabase = await createClient();
 
   const { data: invoice, error } = await supabase
     .from("invoices")
-    .select("id, amount, status, created_at, customers(name, email)")
-    .eq("id", id)
-    .single();
+    .select(`
+      id,
+      amount,
+      status,
+      date,
+      customer:customers!invoices_customer_id_fkey (
+        id,
+        name,
+        email,
+        image_url
+      )
+    `)
+    .eq("id", params.id)
+    .maybeSingle();
 
-  if (error || !invoice) {
+  if (error) {
     return (
-      <main className="p-6 space-y-3">
-        <h1 className="text-2xl font-bold">Invoice not found</h1>
-        <p className="text-gray-600">{error?.message}</p>
-        <Link href="/dashboard/invoices" className="text-blue-600 hover:underline">
-          ← Back to invoices
-        </Link>
+      <main style={{ padding: 24 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Invoice</h1>
+        <p style={{ marginTop: 8, color: "crimson" }}>DB error: {error.message}</p>
+        <p style={{ marginTop: 12 }}>
+          <Link href="/dashboard/invoices">← Back to invoices</Link>
+        </p>
       </main>
     );
   }
 
+  if (!invoice) return notFound();
+
+  const customer = Array.isArray((invoice as any).customer)
+    ? (invoice as any).customer[0]
+    : (invoice as any).customer;
+
   return (
-    <main className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Invoice</h1>
-        <p className="text-gray-600 font-mono">{invoice.id}</p>
-      </div>
+    <main style={{ padding: 24 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700 }}>Invoice #{String(invoice.id).slice(0, 8)}</h1>
 
-      <div className="rounded-md border bg-white p-4 space-y-4">
-        <div>
-  <div className="text-sm text-gray-500">Customer</div>
-  <div className="font-medium">{invoice.customers?.[0]?.name ?? "(unknown)"}</div>
-  <div className="text-sm text-gray-600">{invoice.customers?.[0]?.email ?? ""}</div>
-</div>
+      <div style={{ marginTop: 12, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
+        <div style={{ fontWeight: 700 }}>{customer?.name ?? "Unknown customer"}</div>
+        <div style={{ opacity: 0.75 }}>{customer?.email ?? ""}</div>
 
-        <div className="flex gap-8">
+        <div style={{ marginTop: 10 }}>
           <div>
-            <div className="text-sm text-gray-500">Amount</div>
-            <div className="font-semibold">${Number(invoice.amount).toFixed(2)}</div>
+            <b>Amount:</b> {moneyFromCents((invoice as any).amount)}
           </div>
           <div>
-            <div className="text-sm text-gray-500">Status</div>
-            <div className="font-semibold">{invoice.status}</div>
+            <b>Status:</b> {(invoice as any).status}
           </div>
-        </div>
-
-        <div className="text-xs text-gray-500">
-          Created: {new Date(invoice.created_at).toLocaleString()}
+          <div>
+            <b>Date:</b> {new Date((invoice as any).date).toLocaleDateString()}
+          </div>
         </div>
       </div>
 
-      <Link href="/dashboard/invoices" className="text-blue-600 hover:underline">
-        ← Back to invoices
-      </Link>
+      <p style={{ marginTop: 12 }}>
+        <Link href="/dashboard/invoices">← Back to invoices</Link>
+      </p>
     </main>
   );
 }

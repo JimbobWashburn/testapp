@@ -1,40 +1,31 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function createInvoice(formData: FormData) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const customer_id = String(formData.get("customer_id") || "").trim();
+  const status = String(formData.get("status") || "pending").trim();
+  const date = String(formData.get("date") || "").trim();
 
-  if (!user) redirect("/login");
+  // Amount entered in USD; store as cents (integer)
+  const amountUsdRaw = String(formData.get("amount_usd") || "").trim();
+  const amountCents = Math.round(Number(amountUsdRaw) * 100);
 
-  const customer_id = String(formData.get("customer_id") || "");
-  const amount = Number(formData.get("amount"));
-  const status = String(formData.get("status") || "Open");
+  if (!customer_id) throw new Error("Missing customer_id");
+  if (!date) throw new Error("Missing date");
+  if (!Number.isFinite(amountCents) || amountCents < 0) throw new Error("Invalid amount");
 
-  if (!customer_id || !Number.isFinite(amount) || amount <= 0) {
-    redirect("/dashboard/invoices?error=invalid");
-  }
+  const { error } = await supabase.from("invoices").insert({
+    customer_id,
+    amount: amountCents,
+    status,
+    date,
+  });
 
-  const { data, error } = await supabase
-    .from("invoices")
-    .insert({
-      user_id: user.id,
-      customer_id,
-      amount,
-      status, // "Open" | "Paid" | "Overdue"
-    })
-    .select("id")
-    .single();
+  if (error) throw new Error(error.message);
 
-  if (error || !data?.id) {
-    redirect("/dashboard/invoices?error=db");
-  }
-
-  // ✅ this is the “auto-open invoice page” moment
-  redirect(`/dashboard/invoices/${data.id}`);
+  revalidatePath("/dashboard/invoices");
 }
